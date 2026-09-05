@@ -1,0 +1,256 @@
+import { spawn } from 'node:child_process';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ToolchainInfo } from './parsers/types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
+
+export interface RunOptions {
+  cwd?: string;
+  timeoutMs?: number;
+  env?: Record<string, string>;
+}
+
+export interface RunResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
+export type RuntimeType = 'podman' | 'docker' | 'host';
+
+export class ToolRunner {
+  private runtime: RuntimeType;
+  private imageName: string;
+  private platformsDir: string;
+
+  constructor() {
+    const envRuntime = process.env.MCP_OPENROAD_RUNTIME as RuntimeType | undefined;
+    this.imageName = process.env.MCP_OPENROAD_IMAGE || 'localhost/zesun33/asic';
+    this.platformsDir = path.resolve(projectRoot, 'platforms');
+
+    if (envRuntime && ['podman', 'docker', 'host'].includes(envRuntime)) {
+      this.runtime = envRuntime;
+    } else {
+      this.runtime = 'podman';
+    }
+  }
+
+  public getRuntime(): RuntimeType {
+    return this.runtime;
+  }
+
+  public getImageName(): string {
+    return this.imageName;
+  }
+
+  public setRuntime(runtime: RuntimeType): void {
+    this.runtime = runtime;
+  }
+
+  public async execute(
+    command: string,
+    args: string[],
+    options: RunOptions = {}
+  ): Promise<RunResult> {
+    const cwd = path.resolve(options.cwd || process.cwd());
+    const timeoutMs = options.timeoutMs ?? 30000;
+
+    let finalCommand = command;
+    let finalArgs = args;
+
+    if (this.runtime === 'podman' || this.runtime === 'docker') {
+      finalCommand = this.runtime;
+      const containerArgs: string[] = ['run', '--rm'];
+
+      if (this.runtime === 'podman') {
+        containerArgs.push('--storage-opt', 'overlay.ignore_chown_errors=true');
+      }
+
+      containerArgs.push(
+        '-v',
+        `${this.platformsDir}:/opt/platforms:ro,Z`,
+        '-v',
+        `${cwd}:/workspace:Z`,
+        '-w',
+        '/workspace',
+        this.imageName,
+        command,
+        ...args
+      );
+
+      finalArgs = containerArgs;
+    }
+
+    return new Promise<RunResult>((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+      let settled = false;
+
+      const child = spawn(finalCommand, finalArgs, {
+        cwd,
+        env: {
+          ...process.env,
+          ...(options.env || {}),
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          if (!settled) {
+            child.kill('SIGKILL');
+          }
+        }, 1000);
+      }, timeoutMs);
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString('utf-8');
+      });
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf-8');
+      });
+
+      child.on('error', (err: Error) => {
+        clearTimeout(timer);
+        if (!settled) {
+          settled = true;
+          resolve({
+            exitCode: 1,
+            stdout,
+            stderr: `${stderr}\nProcess spawn error: ${err.message}`,
+            timedOut: false,
+          });
+        }
+      });
+
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer);
+        if (!settled) {
+          settled = true;
+          resolve({
+            exitCode: code ?? (timedOut ? 124 : 1),
+            stdout,
+            stderr,
+            timedOut,
+          });
+        }
+      });
+    });
+  }
+
+  public async runTcl(
+    tclContent: string,
+    options: { cwd?: string; timeoutMs?: number } = {}
+  ): Promise<RunResult> {
+    const cwd = path.resolve(options.cwd || process.cwd());
+    const timeoutMs = options.timeoutMs ?? 30000;
+
+    let finalCommand = 'openroad';
+    let finalArgs = ['-no_splash', '-exit'];
+
+    if (this.runtime === 'podman' || this.runtime === 'docker') {
+      finalCommand = this.runtime;
+      const containerArgs: string[] = ['run', '--rm', '-i'];
+
+      if (this.runtime === 'podman') {
+        containerArgs.push('--storage-opt', 'overlay.ignore_chown_errors=true');
+      }
+
+      containerArgs.push(
+        '-v',
+        `${this.platformsDir}:/opt/platforms:ro,Z`,
+        '-v',
+        `${cwd}:/workspace:Z`,
+        '-w',
+        '/workspace',
+        this.imageName,
+        'openroad',
+        '-no_splash',
+        '-exit'
+      );
+
+      finalArgs = containerArgs;
+    }
+
+    return new Promise<RunResult>((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let timedOut = false;
+      let settled = false;
+
+      const child = spawn(finalCommand, finalArgs, {
+        cwd,
+        env: process.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          if (!settled) {
+            child.kill('SIGKILL');
+          }
+        }, 1000);
+      }, timeoutMs);
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString('utf-8');
+      });
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf-8');
+      });
+
+      child.on('error', (err: Error) => {
+        clearTimeout(timer);
+        if (!settled) {
+          settled = true;
+          resolve({
+            exitCode: 1,
+            stdout,
+            stderr: `${stderr}\nProcess spawn error: ${err.message}`,
+            timedOut: false,
+          });
+        }
+      });
+
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer);
+        if (!settled) {
+          settled = true;
+          resolve({
+            exitCode: code ?? (timedOut ? 124 : 1),
+            stdout,
+            stderr,
+            timedOut,
+          });
+        }
+      });
+
+      child.stdin.write(tclContent);
+      child.stdin.end();
+    });
+  }
+
+  public async getToolchainInfo(cwd?: string): Promise<ToolchainInfo> {
+    const resOpenRoad = await this.execute('openroad', ['-version'], { cwd });
+    const resSta = await this.execute('sta', ['-version'], { cwd });
+
+    return {
+      runtime: this.runtime,
+      image: this.runtime === 'host' ? 'host-native' : this.imageName,
+      openroadVersion: resOpenRoad.stdout.trim() || 'OpenROAD 2.0',
+      staVersion: resSta.stdout.trim() || 'OpenSTA',
+      platforms: ['nangate45', 'sky130'],
+    };
+  }
+}
