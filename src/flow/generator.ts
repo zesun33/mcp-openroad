@@ -35,9 +35,19 @@ export function generatePnrTcl(options: PnrScriptOptions, defaultPlatform: Platf
   } else if (options.clockPeriodNs) {
     sdcCommands = `
 current_design "${options.topModule}"
-create_clock [all_inputs] -name core_clock -period ${options.clockPeriodNs}
+if {[get_ports -quiet clk] != ""} {
+  create_clock -name core_clock -period ${options.clockPeriodNs} [get_ports clk]
+} elseif {[get_ports -quiet clock] != ""} {
+  create_clock -name core_clock -period ${options.clockPeriodNs} [get_ports clock]
+} else {
+  create_clock -name core_clock -period ${options.clockPeriodNs} [lindex [all_inputs] 0]
+}
+set_input_delay -clock core_clock [expr ${options.clockPeriodNs} * 0.1] [all_inputs]
+set_output_delay -clock core_clock [expr ${options.clockPeriodNs} * 0.1] [all_outputs]
 `;
   }
+
+  const utilPercent = Math.round(util * 100);
 
   return `
 # Auto-generated OpenROAD PnR Script
@@ -50,7 +60,7 @@ link_design "${options.topModule}"
 
 ${sdcCommands}
 
-initialize_floorplan -site "${plat.siteName}" -die_area "0 0 60 60" -core_area "5 5 55 55"
+initialize_floorplan -site "${plat.siteName}" -utilization ${utilPercent} -aspect_ratio 1.0 -core_space 15.0
 make_tracks
 place_pins -hor_layer metal3 -ver_layer metal2
 
