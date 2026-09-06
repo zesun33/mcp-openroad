@@ -7,7 +7,7 @@
 [![Protocol: MCP](https://img.shields.io/badge/protocol-MCP_stdio-blueviolet)](https://modelcontextprotocol.io)
 [![Runtime: Rootless Podman](https://img.shields.io/badge/runtime-rootless_podman-brightgreen)](#execution-runtime)
 
-`mcp-openroad` equips AI coding agents and IDEs (**Cursor**, **Windsurf**, **GitHub Copilot / OpenAI Codex**, **Claude Code**, **Google Antigravity**, **OpenCode**, **Cline**) with structured tools to execute physical design (P&R) flows over standard cell netlists. It automates floorplanning, analytical cell placement, clock tree synthesis (CTS), global/detailed routing, and static timing analysis (STA), transforming verbose multi-thousand-line terminal logs into clean, low-token JSON metrics ($< 150$ tokens).
+`mcp-openroad` equips AI coding agents and IDEs (**Cursor**, **Windsurf**, **GitHub Copilot / OpenAI Codex**, **Claude Code**, **Google Antigravity**, **OpenCode**, **Cline**) with structured tools to execute physical design (P&R) flows over standard cell netlists. It automates floorplanning, analytical cell placement, clock tree synthesis (CTS), global/detailed routing, and static timing analysis (STA), transforming verbose multi-thousand-line terminal logs into clean, low-token JSON metrics (< 150 tokens).
 
 ---
 
