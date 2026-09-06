@@ -26,7 +26,7 @@ export interface PnrScriptOptions {
 
 export function generatePnrTcl(options: PnrScriptOptions, defaultPlatform: PlatformPaths): string {
   const plat = options.platform || defaultPlatform;
-  const util = options.coreUtilization ?? 0.4;
+  const util = options.coreUtilization ?? 0.7;
   const outputDef = options.outputDef || `${options.topModule}_pnr.def`;
 
   let sdcCommands = '';
@@ -132,7 +132,7 @@ export function generatePlacementTcl(
   defaultPlatform: PlatformPaths
 ): string {
   const plat = options.platform || defaultPlatform;
-  const density = options.density ?? 0.4;
+  const density = options.density ?? 0.7;
   const outputDef = options.outputDef || `${options.topModule}_place.def`;
 
   return `

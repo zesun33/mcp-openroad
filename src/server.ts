@@ -53,7 +53,7 @@ export function createServer(): Server {
           },
           core_utilization: {
             type: 'number',
-            description: 'Target core cell placement density from 0.0 to 1.0 (default: 0.4).',
+            description: 'Target core cell placement density from 0.0 to 1.0 (default: 0.7).',
           },
           output_def: {
             type: 'string',

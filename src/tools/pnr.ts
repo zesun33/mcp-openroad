@@ -10,7 +10,7 @@ export const openroadPnrSchema = z.object({
   top_module: z.string().describe('Name of the top-level module to place and route'),
   sdc_file: z.string().optional().describe('Optional SDC timing constraints file'),
   clock_period_ns: z.number().optional().default(1.0).describe('Target clock period in ns if no SDC provided (default: 1.0)'),
-  core_utilization: z.number().optional().default(0.4).describe('Target core cell placement density (0.0 - 1.0, default: 0.4)'),
+  core_utilization: z.number().optional().default(0.7).describe('Target core cell placement density (0.0 - 1.0, default: 0.7)'),
   output_def: z.string().optional().describe('Optional output routed DEF file path'),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(60000).describe('Timeout in milliseconds'),
