@@ -15,6 +15,7 @@ import { handleOpenroadCts, openroadCtsSchema } from './tools/cts.js';
 import { handleOpenroadDetailRoute, openroadDetailRouteSchema } from './tools/detail_route.js';
 import { handleOpenroadStaCorners, openroadStaCornersSchema } from './tools/sta_corners.js';
 import { handleOpenroadPower, openroadPowerSchema } from './tools/power.js';
+import { handleOpenroadPdn, openroadPdnSchema } from './tools/pdn.js';
 import { handleOpenroadEval, openroadEvalSchema } from './tools/eval.js';
 
 export function createServer(): Server {
@@ -23,7 +24,7 @@ export function createServer(): Server {
   const server = new Server(
     {
       name: '@zesun33/mcp-openroad',
-      version: '0.2.1',
+      version: '0.2.3',
     },
     {
       capabilities: {
@@ -71,6 +72,11 @@ export function createServer(): Server {
           timeout_ms: {
             type: 'number',
             description: 'Timeout in milliseconds (default: 45000).',
+          },
+          pdn: {
+            type: 'boolean',
+            description:
+              'Insert stdcell PDN after floorplan/tap and before place (Sky130 only; default false).',
           },
         },
         required: ['netlist_file', 'top_module'],
@@ -291,6 +297,23 @@ export function createServer(): Server {
       },
     },
     {
+      name: 'openroad_pdn',
+      description:
+        'Inserts a stdcell power grid (followpins rails + upper-layer straps). Sky130 only. The step tool takes a placed DEF; inside openroad_pnr, PDN runs after floorplan/tap and before place so GPL sees straps. Platforms without PDN config error honestly.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          placed_def: { type: 'string', description: 'Placed DEF file path (after openroad_place / tapcells).' },
+          top_module: { type: 'string', description: 'Name of the top-level module.' },
+          output_def: { type: 'string', description: 'Output DEF with PDN straps.' },
+          platform: { type: 'string', description: "Process platform (use 'sky130'; nangate45 errors honestly)." },
+          cwd: { type: 'string', description: 'Optional working directory.' },
+          timeout_ms: { type: 'number', description: 'Timeout in milliseconds.' },
+        },
+        required: ['placed_def', 'top_module'],
+      },
+    },
+    {
       name: 'openroad_eval',
       description:
         'Evaluates a Tcl snippet in a fresh stateless OpenROAD session and returns capped stdout. Include any read_lef/read_liberty/read_def setup the query needs; no state persists between calls.',
@@ -371,6 +394,11 @@ export function createServer(): Server {
       if (name === 'openroad_power') {
         const parsedArgs = openroadPowerSchema.parse(args);
         return await handleOpenroadPower(runner, parsedArgs);
+      }
+
+      if (name === 'openroad_pdn') {
+        const parsedArgs = openroadPdnSchema.parse(args);
+        return await handleOpenroadPdn(runner, parsedArgs);
       }
 
       if (name === 'openroad_eval') {

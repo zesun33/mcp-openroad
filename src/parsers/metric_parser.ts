@@ -252,3 +252,14 @@ export function countRoutedWires(defText: string): number {
   }
   return count;
 }
+
+/** Signal-net `+ ROUTED` only (ignores SPECIALNETS power stripes). */
+export function countSignalRoutedWires(defText: string): number {
+  const match = defText.match(/\nNETS\s+\d+\s*;([\s\S]*?)\nEND NETS/);
+  if (!match) return 0;
+  let count = 0;
+  for (const line of match[1].split('\n')) {
+    if (/^\s*\+\s+ROUTED\b/.test(line)) count += 1;
+  }
+  return count;
+}

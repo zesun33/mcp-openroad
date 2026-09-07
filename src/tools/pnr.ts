@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { ToolRunner } from '../runner.js';
 import { assertDefWritten } from '../def_guard.js';
 import { resolvePlatformPaths, generatePnrTcl } from '../flow/generator.js';
-import { parseOpenRoadOutput } from '../parsers/metric_parser.js';
+import { parseOpenRoadOutput, countSignalRoutedWires } from '../parsers/metric_parser.js';
 import { parseOpenStaReport } from '../parsers/sta_parser.js';
 import { PnrResult } from '../parsers/types.js';
 
@@ -17,6 +19,8 @@ export const openroadPnrSchema = z.object({
   detail_route: z.boolean().optional().default(false).describe('Run detailed_route after global routing so the DEF contains real wires (needed for extraction/LVS; default: false)'),
   tapcells: z.boolean().optional().default(false).describe('Insert well-tap/endcap cells after placement (needs a platform with tapcell config, e.g. sky130; default: false)'),
   fillers: z.boolean().optional().default(false).describe('Fill placement gaps with filler/decap cells after routing (needs a platform with filler config; default: false)'),
+  pdn: z.boolean().optional().default(false).describe('Insert stdcell PDN (followpins rails + upper straps) after floorplan/tap and before place (Sky130 only; default: false)'),
+  cts: z.boolean().optional().default(false).describe('Run clock_tree_synthesis after place/before route (needed at flop-scale; default: false)'),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(60000).describe('Timeout in milliseconds'),
 });
@@ -32,6 +36,9 @@ export async function handleOpenroadPnr(
   if (args.fillers && !defaultPlatform.fillerMasters) {
     throw new Error(`fillers requested but platform '${args.platform || 'nangate45'}' defines no filler masters.`);
   }
+  if (args.pdn && !defaultPlatform.pdn) {
+    throw new Error(`pdn requested but platform '${args.platform || 'nangate45'}' defines no PDN config.`);
+  }
   const outDef = args.output_def || `${args.top_module}_routed.def`;
 
   const tcl = generatePnrTcl(
@@ -45,6 +52,8 @@ export async function handleOpenroadPnr(
       detailRoute: args.detail_route,
       tapcells: args.tapcells,
       fillers: args.fillers,
+      pdn: args.pdn,
+      cts: args.cts,
     },
     defaultPlatform
   );
@@ -59,7 +68,32 @@ export async function handleOpenroadPnr(
 
   const markersOk = res.exitCode === 0 && res.stdout.includes('PNR_COMPLETE');
   const missingDef = markersOk ? assertDefWritten(args.cwd, outDef) : null;
-  const success = markersOk && missingDef === null;
+  let success = markersOk && missingDef === null && !res.timedOut;
+  const errors: string[] = [];
+
+  let routedWires: number | undefined;
+  if (args.detail_route && markersOk && missingDef === null) {
+    try {
+      const base = path.resolve(args.cwd || process.cwd());
+      const abs = path.isAbsolute(outDef) ? outDef : path.join(base, outDef);
+      routedWires = countSignalRoutedWires(fs.readFileSync(abs, 'utf-8'));
+    } catch {
+      routedWires = undefined;
+    }
+    if (routedWires === 0) {
+      success = false;
+      errors.push(
+        'detailed_route wrote 0 signal wires (DRT-0073 pin-access or GRT produced no guides)'
+      );
+    }
+  }
+
+  const timeoutErr = res.timedOut
+    ? `OpenROAD timed out after ${args.timeout_ms} ms (PNR_COMPLETE not reached)`
+    : null;
+  if (timeoutErr) errors.push(timeoutErr);
+  else if (missingDef) errors.push(missingDef);
+  else if (res.exitCode !== 0) errors.push(res.stderr.trim() || 'OpenROAD execution failed');
 
   const result: PnrResult = {
     success,
@@ -77,8 +111,9 @@ export async function handleOpenroadPnr(
       clockPeriod: args.clock_period_ns,
     },
     defFile: success ? outDef : undefined,
+    timedOut: res.timedOut,
     warnings: metrics.warnings.slice(0, 10),
-    errors: missingDef ? [missingDef] : res.exitCode !== 0 ? [res.stderr.trim() || 'OpenROAD execution failed'] : [],
+    errors,
   };
 
   return {

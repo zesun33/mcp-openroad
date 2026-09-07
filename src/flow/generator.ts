@@ -15,6 +15,39 @@ export interface PlatformPaths {
   tapDistance?: number;
   // Gap fillers + decaps placed after routing (TCL list form).
   fillerMasters?: string[];
+  // Stdcell PDN grid (followpins rails + upper straps). Sky130 only;
+  // nangate45 has none so callers error honestly. In openroad_pnr this
+  // runs after tapcell / before place (ORFS order) so GPL sees straps.
+  pdn?: PdnConfig;
+  // Optional routing/RC/CTS knobs. Unset on nangate45 so that proven
+  // counter scripts stay byte-identical except for post-route STA.
+  signalRoutingLayers?: string;
+  clockRoutingLayers?: string;
+  routeBottomLayer?: string;
+  routeTopLayer?: string;
+  wireRcSignalLayer?: string;
+  wireRcClockLayer?: string;
+  ctsRootBuf?: string;
+  ctsBufList?: string[];
+}
+
+export interface PdnStripe {
+  layer: string;
+  width: number;
+  pitch?: number;
+  offset?: number;
+  followpins?: boolean;
+}
+
+export interface PdnConfig {
+  powerNet: string;
+  groundNet: string;
+  powerPinPatterns: string[];
+  groundPinPatterns: string[];
+  gridName: string;
+  pinLayers: string[];
+  stripes: PdnStripe[];
+  connectLayers: [string, string][];
 }
 
 export function getDefaultPlatformPaths(): PlatformPaths {
@@ -51,7 +84,89 @@ export function getSky130PlatformPaths(pdkRoot: string): PlatformPaths {
       'sky130_fd_sc_hd__decap_4',
       'sky130_fd_sc_hd__decap_8',
     ],
+    // ORFS sky130hd-class grid: met1 followpins rails + met4/met5 straps.
+    // Inserted before place so cells are not parked under straps (that
+    // combination is DRT-0073 on CTS clkbuf pins). Pitch 56 um keeps
+    // straps sparse enough not to starve signal routing.
+    pdn: {
+      powerNet: 'VDD',
+      groundNet: 'VSS',
+      powerPinPatterns: ['^VPWR$', '^VPB$'],
+      groundPinPatterns: ['^VGND$', '^VNB$'],
+      gridName: 'grid',
+      pinLayers: ['met5'],
+      stripes: [
+        { layer: 'met1', width: 0.48, followpins: true },
+        { layer: 'met4', width: 1.6, pitch: 56.0, offset: 2.0 },
+        { layer: 'met5', width: 1.6, pitch: 56.0, offset: 2.0 },
+      ],
+      connectLayers: [
+        ['met1', 'met4'],
+        ['met4', 'met5'],
+      ],
+    },
+    signalRoutingLayers: 'met1-met5',
+    clockRoutingLayers: 'met3-met5',
+    routeBottomLayer: 'met1',
+    routeTopLayer: 'met5',
+    wireRcSignalLayer: 'met2',
+    wireRcClockLayer: 'met5',
+    ctsRootBuf: 'sky130_fd_sc_hd__clkbuf_16',
+    ctsBufList: [
+      'sky130_fd_sc_hd__clkbuf_16',
+      'sky130_fd_sc_hd__clkbuf_8',
+      'sky130_fd_sc_hd__clkbuf_4',
+    ],
   };
+}
+
+/** Tcl block for pdngen. Empty string when the platform has no PDN config. */
+export function generatePdnCommands(plat: PlatformPaths): string {
+  const p = plat.pdn;
+  if (!p) return '';
+  const lines: string[] = [
+    '# PDN stdcell grid (followpins rails + upper straps; targets DRT-0073 pin-access)',
+  ];
+  for (const pat of p.powerPinPatterns) {
+    lines.push(
+      `add_global_connection -net {${p.powerNet}} -inst_pattern {.*} -pin_pattern {${pat}} -power`
+    );
+  }
+  for (const pat of p.groundPinPatterns) {
+    lines.push(
+      `add_global_connection -net {${p.groundNet}} -inst_pattern {.*} -pin_pattern {${pat}} -ground`
+    );
+  }
+  lines.push(`set_voltage_domain -name {CORE} -power {${p.powerNet}} -ground {${p.groundNet}}`);
+  lines.push(`define_pdn_grid -name {${p.gridName}} -pins {${p.pinLayers.join(' ')}}`);
+  for (const s of p.stripes) {
+    if (s.followpins) {
+      lines.push(
+        `add_pdn_stripe -grid {${p.gridName}} -layer {${s.layer}} -width {${s.width}} -followpins`
+      );
+    } else {
+      lines.push(
+        `add_pdn_stripe -grid {${p.gridName}} -layer {${s.layer}} -width {${s.width}} -pitch {${s.pitch}} -offset {${s.offset}}`
+      );
+    }
+  }
+  for (const [a, b] of p.connectLayers) {
+    lines.push(`add_pdn_connect -grid {${p.gridName}} -layers {${a} ${b}}`);
+  }
+  lines.push('pdngen');
+  return lines.join('\n');
+}
+
+/** TritonCTS command. Bare `clock_tree_synthesis` infers clkbuf_1 on Sky130
+ *  (unroutable pin-access). When the platform lists clock buffers, use them. */
+export function generateCtsCommand(plat: PlatformPaths): string {
+  if (plat.ctsRootBuf && plat.ctsBufList && plat.ctsBufList.length > 0) {
+    return (
+      `clock_tree_synthesis -root_buf ${plat.ctsRootBuf}` +
+      ` -buf_list {${plat.ctsBufList.join(' ')}} -sink_clustering_enable`
+    );
+  }
+  return 'clock_tree_synthesis';
 }
 
 export type PlatformName = 'nangate45' | 'sky130';
@@ -83,11 +198,18 @@ export interface PnrScriptOptions {
   // Run detailed_route after global routing (real wires in the DEF).
   // Default false: global-route-only DEFs stream/extract as expected.
   detailRoute?: boolean;
-  // Insert well-tap/endcap cells after placement (needs platform tapcell
-  // config; honest error otherwise). No PDN required.
+  // Insert well-tap/endcap cells after floorplan, before place (ORFS
+  // order; needs platform tapcell config). No PDN required.
   tapcells?: boolean;
   // Fill placement gaps with filler/decap cells after routing.
   fillers?: boolean;
+  // Insert stdcell PDN (needs platform.pdn, e.g. sky130). After taps,
+  // before place so GPL/CTS see the straps (ORFS floorplan order).
+  pdn?: boolean;
+  // Clock tree synthesis after place, before route. Off by default (tiny
+  // nangate45 counters stay unchanged). Required at scale: a 1k-flop
+  // star clock makes detailed_route thrash until the tool timeout.
+  cts?: boolean;
 }
 
 export function generatePnrTcl(options: PnrScriptOptions, defaultPlatform: PlatformPaths): string {
@@ -116,6 +238,38 @@ set_output_delay -clock core_clock [expr ${options.clockPeriodNs} * 0.1] [all_ou
   const utilPercent = Math.round(util * 100);
   const placeDensity = Math.min(0.95, util + (plat.densityMargin ?? 0));
 
+  const tapCmd =
+    options.tapcells && plat.tapcellMaster
+      ? `tapcell -tapcell_master ${plat.tapcellMaster} -endcap_master ${plat.endcapMaster} -distance ${plat.tapDistance}`
+      : '';
+  const pdnCmd = options.pdn && plat.pdn ? generatePdnCommands(plat) : '';
+  const wireRc = [
+    plat.wireRcSignalLayer ? `set_wire_rc -signal -layer ${plat.wireRcSignalLayer}` : '',
+    plat.wireRcClockLayer ? `set_wire_rc -clock -layer ${plat.wireRcClockLayer}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const ctsBlock = options.cts
+    ? `${generateCtsCommand(plat)}\nset_propagated_clock [all_clocks]\ndetailed_placement`
+    : '';
+  const routingLayers = plat.signalRoutingLayers
+    ? `set_routing_layers -signal ${plat.signalRoutingLayers}${
+        plat.clockRoutingLayers ? ` -clock ${plat.clockRoutingLayers}` : ''
+      }`
+    : '';
+  const grCmd = plat.signalRoutingLayers
+    ? 'global_route -congestion_iterations 50'
+    : 'global_route';
+  const drCmd = options.detailRoute
+    ? plat.routeBottomLayer && plat.routeTopLayer
+      ? `detailed_route -bottom_routing_layer ${plat.routeBottomLayer} -top_routing_layer ${plat.routeTopLayer}`
+      : 'detailed_route'
+    : '';
+  const fillCmd =
+    options.fillers && plat.fillerMasters
+      ? `filler_placement {${plat.fillerMasters.join(' ')}}`
+      : '';
+
   return `
 # Auto-generated OpenROAD PnR Script
 read_lef "${plat.techLef}"
@@ -130,16 +284,22 @@ ${sdcCommands}
 initialize_floorplan -site "${plat.siteName}" -utilization ${utilPercent} -aspect_ratio 1.0 -core_space 15.0
 make_tracks
 place_pins -hor_layer ${plat.pinHorLayer} -ver_layer ${plat.pinVerLayer}
+${tapCmd}
+${pdnCmd}
+${wireRc}
 
 global_placement -density ${placeDensity}
 detailed_placement
-${options.tapcells && plat.tapcellMaster ? `tapcell -tapcell_master ${plat.tapcellMaster} -endcap_master ${plat.endcapMaster} -distance ${plat.tapDistance}` : ""}
+${ctsBlock}
 
-global_route
-${options.detailRoute ? "detailed_route" : ""}
-${options.fillers && plat.fillerMasters ? `filler_placement {${plat.fillerMasters.join(" ")}}` : ""}
+${routingLayers}
+${grCmd}
+${drCmd}
+${fillCmd}
 
-estimate_parasitics -placement
+if {[catch {estimate_parasitics -global_routing}]} {
+  estimate_parasitics -placement
+}
 report_checks -path_delay max
 report_wns
 report_tns
@@ -329,7 +489,7 @@ read_def "${options.placedDef}"
 
 ${sdcCommands}
 
-clock_tree_synthesis
+${generateCtsCommand(plat)}
 
 estimate_parasitics -placement
 report_wns
@@ -337,6 +497,38 @@ report_tns
 
 write_def "${outputDef}"
 puts "CTS_COMPLETE: ${outputDef}"
+`;
+}
+
+export interface PdnScriptOptions {
+  placedDef: string;
+  topModule: string;
+  outputDef?: string;
+  platform?: PlatformPaths;
+}
+
+export function generatePdnTcl(
+  options: PdnScriptOptions,
+  defaultPlatform: PlatformPaths
+): string {
+  const plat = options.platform || defaultPlatform;
+  const outputDef = options.outputDef || `${options.topModule}_pdn.def`;
+  const pdn = generatePdnCommands(plat);
+  if (!pdn) {
+    throw new Error('generatePdnTcl: platform defines no PDN config');
+  }
+
+  return `
+read_lef "${plat.techLef}"
+read_lef "${plat.macroLef}"
+read_liberty "${plat.liberty}"
+
+read_def "${options.placedDef}"
+
+${pdn}
+
+write_def "${outputDef}"
+puts "PDN_COMPLETE: ${outputDef}"
 `;
 }
 

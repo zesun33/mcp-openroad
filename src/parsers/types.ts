@@ -34,6 +34,7 @@ export interface PnrResult {
   hpwl?: number;
   timing: TimingMetrics;
   defFile?: string;
+  timedOut?: boolean;
   warnings: string[];
   errors: string[];
 }
@@ -94,6 +95,14 @@ export interface DetailRouteResult {
   drcIssues: number;
   drcSamples: string[];
   routedWires?: number;
+  defFile?: string;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface PdnResult {
+  success: boolean;
+  grid?: string;
   defFile?: string;
   warnings: string[];
   errors: string[];

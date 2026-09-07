@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseOpenRoadOutput, parseCtsSummary, parseDrcIssues, parsePowerReport, countRoutedWires } from '../src/parsers/metric_parser.js';
+import { parseOpenRoadOutput, parseCtsSummary, parseDrcIssues, parsePowerReport, countRoutedWires, countSignalRoutedWires } from '../src/parsers/metric_parser.js';
 import { parseOpenStaReport } from '../src/parsers/sta_parser.js';
 
 test('parseOpenRoadOutput extracts cell count, utilization, and HPWL', () => {
@@ -132,4 +132,21 @@ END DESIGN
 `;
   assert.equal(countRoutedWires(def), 2);
   assert.equal(countRoutedWires('VERSION 5.8 ;\nEND DESIGN\n'), 0);
+});
+
+test('countSignalRoutedWires ignores SPECIALNETS power stripes', () => {
+  const def = `VERSION 5.8 ;
+SPECIALNETS 2 ;
+    - VDD + USE POWER
+      + ROUTED met5 1600 + SHAPE STRIPE ( 0 0 ) ( 100 0 )
+      + ROUTED met4 1600 + SHAPE STRIPE ( 0 0 ) ( 0 100 )
+    - VSS + USE GROUND
+      + ROUTED met5 1600 + SHAPE STRIPE ( 0 50 ) ( 100 50 )
+END SPECIALNETS
+NETS 1 ;
+    - n1 ( u1 A ) ( u2 X ) + USE SIGNAL ;
+END NETS
+`;
+  assert.equal(countRoutedWires(def), 3);
+  assert.equal(countSignalRoutedWires(def), 0);
 });
