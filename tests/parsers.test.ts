@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseOpenRoadOutput, parseCtsSummary, parseDrcIssues, parsePowerReport } from '../src/parsers/metric_parser.js';
+import { parseOpenRoadOutput, parseCtsSummary, parseDrcIssues, parsePowerReport, countRoutedWires } from '../src/parsers/metric_parser.js';
 import { parseOpenStaReport } from '../src/parsers/sta_parser.js';
 
 test('parseOpenRoadOutput extracts cell count, utilization, and HPWL', () => {
@@ -117,4 +117,19 @@ Total                  4.46e-05   7.04e-06   5.96e-07   5.23e-05 100.0%
   assert.equal(power.internalW, 4.46e-05);
   assert.equal(power.breakdown?.sequential, 3.28e-05);
   assert.equal(parsePowerReport('no power').totalW, undefined);
+});
+
+test('countRoutedWires counts ROUTED continuations only', () => {
+  const def = `VERSION 5.8 ;
+DESIGN top ;
+NETS 2 ;
+- n1 ( u1 A ) ;
++ ROUTED metal2 ( 0 0 ) ;
++ ROUTED metal2 ( 100 0 ) ;
+- n2 ( u2 B ) ;
+END NETS
+END DESIGN
+`;
+  assert.equal(countRoutedWires(def), 2);
+  assert.equal(countRoutedWires('VERSION 5.8 ;\nEND DESIGN\n'), 0);
 });

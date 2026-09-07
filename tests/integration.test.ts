@@ -125,6 +125,27 @@ test('Integration: deep flow place -> CTS -> route -> detail_route -> power', as
   assert.equal(drouteData.success, true);
   assert.equal(typeof drouteData.drcIssues, 'number');
   assert.ok(Array.isArray(drouteData.drcSamples));
+  assert.equal(typeof drouteData.routedWires, 'number');
+
+  // Non-CTS path routes real geometry: guards the zero-wire blind spot.
+  const route2 = await handleOpenroadRoute(runner, {
+    placed_def: 'deep_place_tmp.def',
+    top_module: 'counter',
+    output_def: 'deep_route_noccts_tmp.def',
+    cwd: projectRoot,
+    timeout_ms: 120000,
+  });
+  assert.equal(JSON.parse(route2.content[0].text).success, true);
+  const droute2 = await handleOpenroadDetailRoute(runner, {
+    routed_def: 'deep_route_noccts_tmp.def',
+    top_module: 'counter',
+    output_def: 'deep_droute_noccts_tmp.def',
+    cwd: projectRoot,
+    timeout_ms: 300000,
+  });
+  const droute2Data = JSON.parse(droute2.content[0].text);
+  assert.equal(droute2Data.success, true);
+  assert.ok(droute2Data.routedWires > 0, `Expected routed wires, got ${droute2Data.routedWires}`);
 
   const power = await handleOpenroadPower(runner, {
     def_file: 'deep_place_tmp.def',

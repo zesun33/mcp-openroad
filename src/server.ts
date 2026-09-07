@@ -23,7 +23,7 @@ export function createServer(): Server {
   const server = new Server(
     {
       name: '@zesun33/mcp-openroad',
-      version: '0.2.0',
+      version: '0.2.1',
     },
     {
       capabilities: {

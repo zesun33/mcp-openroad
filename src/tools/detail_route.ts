@@ -1,8 +1,10 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
 import { assertDefWritten } from '../def_guard.js';
 import { getDefaultPlatformPaths, generateDetailRouteTcl } from '../flow/generator.js';
-import { parseOpenRoadOutput, parseDrcIssues } from '../parsers/metric_parser.js';
+import { parseOpenRoadOutput, parseDrcIssues, countRoutedWires } from '../parsers/metric_parser.js';
 import { DetailRouteResult } from '../parsers/types.js';
 
 export const openroadDetailRouteSchema = z.object({
@@ -43,12 +45,33 @@ export async function handleOpenroadDetailRoute(
   const missingDef = markersOk ? assertDefWritten(args.cwd, outDef) : null;
   const success = markersOk && missingDef === null;
 
+  // Success means the router executed; routedWires tells whether it
+  // actually routed anything (CTS-buffer pin-access failures can yield
+  // an unchanged DEF with zero wires — see DRT-0073).
+  let routedWires: number | undefined;
+  if (success) {
+    try {
+      const base = path.resolve(args.cwd || process.cwd());
+      const abs = path.isAbsolute(outDef) ? outDef : path.join(base, outDef);
+      routedWires = countRoutedWires(fs.readFileSync(abs, 'utf-8'));
+    } catch {
+      routedWires = undefined;
+    }
+  }
+  const warnings = metrics.warnings.slice(0, 10);
+  if (success && routedWires === 0) {
+    warnings.unshift(
+      'Detail route completed but routed 0 wires; check DRC samples for pin-access (DRT-0073) or rerun without prior CTS.'
+    );
+  }
+
   const result: DetailRouteResult = {
     success,
     drcIssues: drc.count,
     drcSamples: drc.samples,
+    ...(routedWires !== undefined ? { routedWires } : {}),
     defFile: success ? outDef : undefined,
-    warnings: metrics.warnings.slice(0, 10),
+    warnings,
     errors: missingDef ? [missingDef] : res.exitCode !== 0 ? [res.stderr.trim() || 'Detail route execution failed'] : [],
   };
 

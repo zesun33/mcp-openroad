@@ -93,6 +93,7 @@ export interface DetailRouteResult {
   success: boolean;
   drcIssues: number;
   drcSamples: string[];
+  routedWires?: number;
   defFile?: string;
   warnings: string[];
   errors: string[];

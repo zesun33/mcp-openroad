@@ -239,3 +239,16 @@ export function parsePowerReport(stdout: string): PowerReport {
   if (Object.keys(breakdown).length > 0) result.breakdown = breakdown;
   return result;
 }
+
+/**
+ * Counts routed wire segments (`+ ROUTED` continuations) in DEF text.
+ * Zero with a successful TritonRoute run means nothing was actually
+ * routed (e.g. pin-access failures on CTS buffers) — reported, not hidden.
+ */
+export function countRoutedWires(defText: string): number {
+  let count = 0;
+  for (const line of defText.split('\n')) {
+    if (/^\s*\+\s+ROUTED\b/.test(line)) count += 1;
+  }
+  return count;
+}
