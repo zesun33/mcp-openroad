@@ -11,7 +11,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "test": "tsx --test tests/**/*.test.ts",
-    "test:unit": "tsx --test tests/parsers.test.ts tests/contract.test.ts",
+    "test:unit": "tsx --test tests/parsers.test.ts tests/contract.test.ts tests/platform.test.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {

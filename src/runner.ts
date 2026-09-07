@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ToolchainInfo } from './parsers/types.js';
@@ -26,11 +27,26 @@ export class ToolRunner {
   private runtime: RuntimeType;
   private imageName: string;
   private platformsDir: string;
+  private pdkDir: string | null;
 
   constructor() {
     const envRuntime = process.env.MCP_OPENROAD_RUNTIME as RuntimeType | undefined;
     this.imageName = process.env.MCP_OPENROAD_IMAGE || 'localhost/zesun33/asic';
     this.platformsDir = path.resolve(projectRoot, 'platforms');
+    // Optional PDK variant dir (the one containing libs.tech/libs.ref),
+    // e.g. <cache>/volare/sky130/versions/<sha>/sky130A. Mounted at /pdk.
+    const pdkEnv = process.env.MCP_OPENROAD_PDK_ROOT || process.env.PDK_ROOT || '';
+    // Guard: podman auto-creates missing -v sources (as root), so only
+    // mount when the directory actually exists.
+    this.pdkDir = null;
+    if (pdkEnv) {
+      try {
+        const st = fs.statSync(path.resolve(pdkEnv));
+        if (st.isDirectory()) this.pdkDir = path.resolve(pdkEnv);
+      } catch {
+        this.pdkDir = null;
+      }
+    }
 
     if (envRuntime && ['podman', 'docker', 'host'].includes(envRuntime)) {
       this.runtime = envRuntime;
@@ -45,6 +61,10 @@ export class ToolRunner {
 
   public getImageName(): string {
     return this.imageName;
+  }
+
+  public getPdkDir(): string | null {
+    return this.pdkDir;
   }
 
   public setRuntime(runtime: RuntimeType): void {
@@ -77,6 +97,11 @@ export class ToolRunner {
         `${cwd}:/workspace:Z`,
         '-w',
         '/workspace',
+      );
+      if (this.pdkDir) {
+        containerArgs.push('-v', `${this.pdkDir}:/pdk:ro,Z`);
+      }
+      containerArgs.push(
         this.imageName,
         command,
         ...args
@@ -171,6 +196,11 @@ export class ToolRunner {
         `${cwd}:/workspace:Z`,
         '-w',
         '/workspace',
+      );
+      if (this.pdkDir) {
+        containerArgs.push('-v', `${this.pdkDir}:/pdk:ro,Z`);
+      }
+      containerArgs.push(
         this.imageName,
         'openroad',
         '-no_splash',

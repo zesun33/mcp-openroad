@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
 import { assertDefWritten } from '../def_guard.js';
-import { getDefaultPlatformPaths, generatePlacementTcl } from '../flow/generator.js';
+import { resolvePlatformPaths, generatePlacementTcl } from '../flow/generator.js';
 import { parseOpenRoadOutput } from '../parsers/metric_parser.js';
 import { PlacementResult } from '../parsers/types.js';
 
@@ -16,6 +16,7 @@ export const openroadPlaceSchema = z.object({
   top_module: z.string().describe('Name of the top-level module'),
   density: z.number().optional().default(0.4).describe('Target placement density (default: 0.4)'),
   output_def: z.string().optional().describe('Output placed DEF file path'),
+  platform: z.enum(['nangate45', 'sky130']).optional().default('nangate45').describe("Process platform (default: 'nangate45'). 'sky130' needs MCP_OPENROAD_PDK_ROOT."),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(30000).describe('Timeout in milliseconds'),
 });
@@ -24,7 +25,7 @@ export async function handleOpenroadPlace(
   runner: ToolRunner,
   args: z.infer<typeof openroadPlaceSchema>
 ) {
-  const defaultPlatform = getDefaultPlatformPaths();
+  const defaultPlatform = resolvePlatformPaths(runner, args.platform);
   const outDef = args.output_def || `${args.top_module}_placed.def`;
 
   const tcl = generatePlacementTcl(

@@ -3,6 +3,12 @@ export interface PlatformPaths {
   macroLef: string;
   liberty: string;
   siteName: string;
+  pinHorLayer: string;
+  pinVerLayer: string;
+  // Extra headroom added to core utilization for the placer's target
+  // density. Sky130 needs ~0.15 on small designs (GPL-0302 otherwise);
+  // nangate45 keeps proven exact-tie behavior when unset.
+  densityMargin?: number;
 }
 
 export function getDefaultPlatformPaths(): PlatformPaths {
@@ -11,7 +17,42 @@ export function getDefaultPlatformPaths(): PlatformPaths {
     macroLef: '/opt/platforms/nangate45/NangateOpenCellLibrary.macro.lef',
     liberty: '/opt/platforms/nangate45/NangateOpenCellLibrary_typical.lib',
     siteName: 'FreePDK45_38x28_10R_NP_162NW_34O',
+    pinHorLayer: 'metal3',
+    pinVerLayer: 'metal2',
   };
+}
+
+// Sky130 (sky130_fd_sc_hd, tt corner) via a host-side volare PDK.
+// pdkRoot is the container mount (/pdk) or the host cache dir.
+export function getSky130PlatformPaths(pdkRoot: string): PlatformPaths {
+  const rel = (p: string) => `${pdkRoot}/sky130A/${p}`;
+  return {
+    techLef: rel('libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__nom.tlef'),
+    macroLef: rel('libs.ref/sky130_fd_sc_hd/lef/sky130_fd_sc_hd.lef'),
+    liberty: rel('libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_100C_1v80.lib'),
+    siteName: 'unithd',
+    pinHorLayer: 'met3',
+    pinVerLayer: 'met2',
+    densityMargin: 0.15,
+  };
+}
+
+export type PlatformName = 'nangate45' | 'sky130';
+
+export function resolvePlatformPaths(
+  runner: { getPdkDir(): string | null; getRuntime(): string },
+  name?: string
+): PlatformPaths {
+  if (name === 'sky130') {
+    const dir = runner.getPdkDir();
+    if (!dir) {
+      throw new Error(
+        "Platform 'sky130' needs the Sky130 PDK: set MCP_OPENROAD_PDK_ROOT to a volare sky130 cache (the <sha> version dir)."
+      );
+    }
+    return getSky130PlatformPaths(runner.getRuntime() === 'host' ? dir : '/pdk');
+  }
+  return getDefaultPlatformPaths();
 }
 
 export interface PnrScriptOptions {
@@ -48,6 +89,7 @@ set_output_delay -clock core_clock [expr ${options.clockPeriodNs} * 0.1] [all_ou
   }
 
   const utilPercent = Math.round(util * 100);
+  const placeDensity = Math.min(0.95, util + (plat.densityMargin ?? 0));
 
   return `
 # Auto-generated OpenROAD PnR Script
@@ -62,9 +104,9 @@ ${sdcCommands}
 
 initialize_floorplan -site "${plat.siteName}" -utilization ${utilPercent} -aspect_ratio 1.0 -core_space 15.0
 make_tracks
-place_pins -hor_layer metal3 -ver_layer metal2
+place_pins -hor_layer ${plat.pinHorLayer} -ver_layer ${plat.pinVerLayer}
 
-global_placement -density ${util}
+global_placement -density ${placeDensity}
 detailed_placement
 
 global_route
@@ -112,7 +154,7 @@ link_design "${options.topModule}"
 
 initialize_floorplan -site "${plat.siteName}" -die_area "0 0 ${dw} ${dh}" -core_area "${margin} ${margin} ${cw} ${ch}"
 make_tracks
-place_pins -hor_layer metal3 -ver_layer metal2
+place_pins -hor_layer ${plat.pinHorLayer} -ver_layer ${plat.pinVerLayer}
 
 write_def "${outputDef}"
 puts "FLOORPLAN_COMPLETE: ${outputDef}"

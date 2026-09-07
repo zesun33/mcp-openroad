@@ -201,3 +201,50 @@ test('Integration: openroad_sta_corners rejects mismatched corner names', async 
   });
   assert.equal(JSON.parse(res.content[0].text).success, false);
 });
+
+test('Integration: openroad_pnr rejects sky130 without a visible PDK', async () => {
+  const savedOpenroad = process.env.MCP_OPENROAD_PDK_ROOT;
+  const savedShared = process.env.PDK_ROOT;
+  delete process.env.MCP_OPENROAD_PDK_ROOT;
+  delete process.env.PDK_ROOT;
+  try {
+    const runner = new ToolRunner();
+    await assert.rejects(
+      handleOpenroadPnr(runner, {
+        netlist_file: 'fixtures/counter_sky130.v',
+        top_module: 'counter',
+        platform: 'sky130',
+        cwd: projectRoot,
+        timeout_ms: 60000,
+      }),
+      /Sky130 PDK/
+    );
+  } finally {
+    if (savedOpenroad !== undefined) process.env.MCP_OPENROAD_PDK_ROOT = savedOpenroad;
+    if (savedShared !== undefined) process.env.PDK_ROOT = savedShared;
+  }
+});
+
+const PDK_ROOT = process.env.MCP_OPENROAD_PDK_ROOT || process.env.PDK_ROOT || '';
+
+test('Integration (PDK): openroad_pnr routes counter on sky130', { skip: !PDK_ROOT }, async () => {
+  const runner = new ToolRunner();
+  const res = await handleOpenroadPnr(runner, {
+    netlist_file: 'fixtures/counter_sky130.v',
+    top_module: 'counter',
+    sdc_file: 'fixtures/counter.sdc',
+    platform: 'sky130',
+    core_utilization: 0.5,
+    output_def: 'counter_sky130_tmp.def',
+    cwd: projectRoot,
+    timeout_ms: 300000,
+  });
+
+  assert.ok(res.content[0].text);
+  const data = JSON.parse(res.content[0].text);
+  assert.equal(data.success, true, `sky130 P&R failed: ${JSON.stringify(data.errors)}`);
+  assert.equal(data.platform, 'sky130');
+  assert.equal(data.topModule, 'counter');
+  assert.ok(data.cellCount > 0);
+  assert.ok(data.defFile);
+});

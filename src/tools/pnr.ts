@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
 import { assertDefWritten } from '../def_guard.js';
-import { getDefaultPlatformPaths, generatePnrTcl } from '../flow/generator.js';
+import { resolvePlatformPaths, generatePnrTcl } from '../flow/generator.js';
 import { parseOpenRoadOutput } from '../parsers/metric_parser.js';
 import { parseOpenStaReport } from '../parsers/sta_parser.js';
 import { PnrResult } from '../parsers/types.js';
@@ -13,6 +13,7 @@ export const openroadPnrSchema = z.object({
   clock_period_ns: z.number().optional().default(1.0).describe('Target clock period in ns if no SDC provided (default: 1.0)'),
   core_utilization: z.number().optional().default(0.7).describe('Target core cell placement density (0.0 - 1.0, default: 0.7)'),
   output_def: z.string().optional().describe('Optional output routed DEF file path'),
+  platform: z.enum(['nangate45', 'sky130']).optional().default('nangate45').describe("Process platform (default: 'nangate45'). 'sky130' needs MCP_OPENROAD_PDK_ROOT."),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(60000).describe('Timeout in milliseconds'),
 });
@@ -21,7 +22,7 @@ export async function handleOpenroadPnr(
   runner: ToolRunner,
   args: z.infer<typeof openroadPnrSchema>
 ) {
-  const defaultPlatform = getDefaultPlatformPaths();
+  const defaultPlatform = resolvePlatformPaths(runner, args.platform);
   const outDef = args.output_def || `${args.top_module}_routed.def`;
 
   const tcl = generatePnrTcl(
@@ -51,7 +52,7 @@ export async function handleOpenroadPnr(
   const result: PnrResult = {
     success,
     topModule: args.top_module,
-    platform: 'nangate45',
+    platform: args.platform || 'nangate45',
     dieArea: metrics.dieArea,
     coreArea: metrics.coreArea,
     cellCount: metrics.cellCount,

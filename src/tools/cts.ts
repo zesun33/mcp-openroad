@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
 import { assertDefWritten } from '../def_guard.js';
-import { getDefaultPlatformPaths, generateCtsTcl } from '../flow/generator.js';
+import { resolvePlatformPaths, generateCtsTcl } from '../flow/generator.js';
 import { parseOpenRoadOutput, parseCtsSummary } from '../parsers/metric_parser.js';
 import { parseOpenStaReport } from '../parsers/sta_parser.js';
 import { CtsResult } from '../parsers/types.js';
@@ -12,6 +12,7 @@ export const openroadCtsSchema = z.object({
   sdc_file: z.string().optional().describe('Optional SDC timing constraints file path'),
   clock_period_ns: z.number().optional().default(1.0).describe('Target clock period in ns if no SDC provided (default: 1.0)'),
   output_def: z.string().optional().describe('Output CTS DEF file path'),
+  platform: z.enum(['nangate45', 'sky130']).optional().default('nangate45').describe("Process platform (default: 'nangate45'). 'sky130' needs MCP_OPENROAD_PDK_ROOT."),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(60000).describe('Timeout in milliseconds'),
 });
@@ -20,7 +21,7 @@ export async function handleOpenroadCts(
   runner: ToolRunner,
   args: z.infer<typeof openroadCtsSchema>
 ) {
-  const defaultPlatform = getDefaultPlatformPaths();
+  const defaultPlatform = resolvePlatformPaths(runner, args.platform);
   const outDef = args.output_def || `${args.top_module}_cts.def`;
 
   const tcl = generateCtsTcl(

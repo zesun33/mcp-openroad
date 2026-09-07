@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
-import { getDefaultPlatformPaths, generateStaTcl } from '../flow/generator.js';
+import { resolvePlatformPaths, generateStaTcl } from '../flow/generator.js';
 import { parseOpenStaReport } from '../parsers/sta_parser.js';
 import { StaResult } from '../parsers/types.js';
 
@@ -15,6 +15,7 @@ export const openroadStaSchema = z.object({
   top_module: z.string().describe('Name of the top-level module'),
   sdc_file: z.string().optional().describe('Optional SDC timing constraints file'),
   clock_period_ns: z.number().optional().default(1.0).describe('Target clock period in ns (default: 1.0)'),
+  platform: z.enum(['nangate45', 'sky130']).optional().default('nangate45').describe("Process platform (default: 'nangate45'). 'sky130' needs MCP_OPENROAD_PDK_ROOT."),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(30000).describe('Timeout in milliseconds'),
 });
@@ -23,7 +24,7 @@ export async function handleOpenroadSta(
   runner: ToolRunner,
   args: z.infer<typeof openroadStaSchema>
 ) {
-  const defaultPlatform = getDefaultPlatformPaths();
+  const defaultPlatform = resolvePlatformPaths(runner, args.platform);
 
   const tcl = generateStaTcl(
     {
