@@ -48,3 +48,12 @@ test('nangate45 P&R script keeps exact density tie', () => {
   assert.ok(tcl.includes('global_placement -density 0.4'));
   assert.ok(tcl.includes('place_pins -hor_layer metal3 -ver_layer metal2'));
 });
+
+test('pnr script includes detailed_route only when requested', () => {
+  const plat = getDefaultPlatformPaths();
+  const base = { netlistFile: 'c.v', topModule: 'c', outputDef: 'c.def' };
+  const plain = generatePnrTcl(base, plat);
+  assert.ok(!plain.includes('detailed_route'), 'default pnr must stay global-route-only');
+  const detailed = generatePnrTcl({ ...base, detailRoute: true }, plat);
+  assert.ok(detailed.includes('\ndetailed_route\n'), 'detail flag must emit detailed_route');
+});

@@ -14,6 +14,7 @@ export const openroadPnrSchema = z.object({
   core_utilization: z.number().optional().default(0.7).describe('Target core cell placement density (0.0 - 1.0, default: 0.7)'),
   output_def: z.string().optional().describe('Optional output routed DEF file path'),
   platform: z.enum(['nangate45', 'sky130']).optional().default('nangate45').describe("Process platform (default: 'nangate45'). 'sky130' needs MCP_OPENROAD_PDK_ROOT."),
+  detail_route: z.boolean().optional().default(false).describe('Run detailed_route after global routing so the DEF contains real wires (needed for extraction/LVS; default: false)'),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(60000).describe('Timeout in milliseconds'),
 });
@@ -33,6 +34,7 @@ export async function handleOpenroadPnr(
       clockPeriodNs: args.clock_period_ns,
       coreUtilization: args.core_utilization,
       outputDef: outDef,
+      detailRoute: args.detail_route,
     },
     defaultPlatform
   );

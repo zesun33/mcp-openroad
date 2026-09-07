@@ -63,6 +63,9 @@ export interface PnrScriptOptions {
   coreUtilization?: number;
   outputDef?: string;
   platform?: PlatformPaths;
+  // Run detailed_route after global routing (real wires in the DEF).
+  // Default false: global-route-only DEFs stream/extract as expected.
+  detailRoute?: boolean;
 }
 
 export function generatePnrTcl(options: PnrScriptOptions, defaultPlatform: PlatformPaths): string {
@@ -110,6 +113,7 @@ global_placement -density ${placeDensity}
 detailed_placement
 
 global_route
+${options.detailRoute ? "detailed_route" : ""}
 
 estimate_parasitics -placement
 report_checks -path_delay max

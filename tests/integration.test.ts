@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ToolRunner } from '../src/runner.js';
@@ -247,4 +248,25 @@ test('Integration (PDK): openroad_pnr routes counter on sky130', { skip: !PDK_RO
   assert.equal(data.topModule, 'counter');
   assert.ok(data.cellCount > 0);
   assert.ok(data.defFile);
+});
+
+test('Integration (PDK): openroad_pnr detail_route writes real wires on sky130', { skip: !PDK_ROOT }, async () => {
+  const runner = new ToolRunner();
+  const res = await handleOpenroadPnr(runner, {
+    netlist_file: 'fixtures/counter_sky130.v',
+    top_module: 'counter',
+    sdc_file: 'fixtures/counter.sdc',
+    platform: 'sky130',
+    core_utilization: 0.5,
+    detail_route: true,
+    output_def: 'counter_sky130_dr_tmp.def',
+    cwd: projectRoot,
+    timeout_ms: 300000,
+  });
+
+  const data = JSON.parse(res.content[0].text);
+  assert.equal(data.success, true, `sky130 detail P&R failed: ${JSON.stringify(data.errors)}`);
+  // Real wires (not guides) are what extraction/LVS need.
+  const def = await fs.readFile(path.join(projectRoot, 'counter_sky130_dr_tmp.def'), 'utf-8');
+  assert.ok(/\+ ROUTED \S/.test(def), 'expected ROUTED wire geometry in DEF');
 });
