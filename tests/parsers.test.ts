@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseOpenRoadOutput } from '../src/parsers/metric_parser.js';
+import { parseOpenRoadOutput, parseCtsSummary, parseDrcIssues, parsePowerReport } from '../src/parsers/metric_parser.js';
 import { parseOpenStaReport } from '../src/parsers/sta_parser.js';
 
 test('parseOpenRoadOutput extracts cell count, utilization, and HPWL', () => {
@@ -84,4 +84,37 @@ worst slack -0.35
   assert.equal(parsed.timing.tns, -1.40);
   assert.equal(parsed.criticalPaths.length, 1);
   assert.equal(parsed.criticalPaths[0].slack, -0.35);
+});
+
+test('parseCtsSummary reads inserted buffers and nets', () => {
+  const out = `[INFO CTS-0018]     Created 3 clock buffers.
+[INFO CTS-0015]     Created 3 clock nets.
+`;
+  const cts = parseCtsSummary(out);
+  assert.equal(cts.buffers, 3);
+  assert.equal(cts.nets, 3);
+  assert.deepEqual(parseCtsSummary('no cts here'), { buffers: undefined, nets: undefined });
+});
+
+test('parseDrcIssues counts DRT errors and access failures', () => {
+  const out = `[ERROR DRT-0073] No access point for clkbuf_0_clk/A.
+plain line
+[ERROR DRT-0073] No access point for x/B.
+`;
+  const drc = parseDrcIssues(out);
+  assert.equal(drc.count, 2);
+  assert.equal(drc.samples.length, 2);
+  assert.equal(parseDrcIssues('clean run').count, 0);
+});
+
+test('parsePowerReport reads Total watts and group split', () => {
+  const out = `Group                  Internal  Switching    Leakage      Total
+Sequential             3.24e-05   0.00e+00   3.39e-07   3.28e-05  62.7%
+Total                  4.46e-05   7.04e-06   5.96e-07   5.23e-05 100.0%
+`;
+  const power = parsePowerReport(out);
+  assert.equal(power.totalW, 5.23e-05);
+  assert.equal(power.internalW, 4.46e-05);
+  assert.equal(power.breakdown?.sequential, 3.28e-05);
+  assert.equal(parsePowerReport('no power').totalW, undefined);
 });

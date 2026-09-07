@@ -79,6 +79,62 @@ export interface StaResult {
   errors: string[];
 }
 
+export interface CtsResult {
+  success: boolean;
+  clockBuffers?: number;
+  clockNets?: number;
+  timing: TimingMetrics;
+  defFile?: string;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface DetailRouteResult {
+  success: boolean;
+  drcIssues: number;
+  drcSamples: string[];
+  defFile?: string;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface StaCorner {
+  corner: string;
+  liberty: string;
+  wns: number;
+  tns: number;
+  timingMet: boolean;
+}
+
+export interface StaCornersResult {
+  success: boolean;
+  corners: StaCorner[];
+  worstCorner?: string;
+  worstWns?: number;
+  allMet: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface PowerResult {
+  success: boolean;
+  totalW?: number;
+  internalW?: number;
+  switchingW?: number;
+  leakageW?: number;
+  breakdown?: Record<string, number>;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface EvalResult {
+  success: boolean;
+  stdout: string;
+  truncated: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
 export interface ToolchainInfo {
   runtime: string;
   image: string;

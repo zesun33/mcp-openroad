@@ -147,3 +147,95 @@ export function parseOpenRoadOutput(stdout: string, stderr: string): ExtractedMe
     errors,
   };
 }
+
+export interface CtsSummary {
+  buffers?: number;
+  nets?: number;
+}
+
+/**
+ * Parses CTS result lines: "Created N clock buffers." / "Created N clock nets."
+ */
+export function parseCtsSummary(stdout: string): CtsSummary {
+  let buffers: number | undefined;
+  let nets: number | undefined;
+
+  for (const line of stdout.split('\n')) {
+    const b = line.match(/Created\s+(\d+)\s+clock buffers?\./i);
+    if (b) buffers = parseInt(b[1], 10);
+    const n = line.match(/Created\s+(\d+)\s+clock nets?\./i);
+    if (n) nets = parseInt(n[1], 10);
+  }
+
+  return { buffers, nets };
+}
+
+export interface DrcSummary {
+  count: number;
+  samples: string[];
+}
+
+/**
+ * Counts detailed-route DRC markers ([ERROR DRT-...], "No access point").
+ * Samples are capped for token safety.
+ */
+export function parseDrcIssues(stdout: string, maxSamples: number = 10): DrcSummary {
+  const samples: string[] = [];
+  let count = 0;
+
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (/^\[ERROR\s+DRT-/i.test(trimmed) || /No access point for/i.test(trimmed)) {
+      count += 1;
+      if (samples.length < Math.max(1, maxSamples)) samples.push(trimmed.slice(0, 200));
+    }
+  }
+
+  return { count, samples };
+}
+
+export interface PowerReport {
+  totalW?: number;
+  internalW?: number;
+  switchingW?: number;
+  leakageW?: number;
+  breakdown?: Record<string, number>;
+}
+
+/**
+ * Parses OpenSTA `report_power` output: per-group rows plus the Total row
+ * (Internal / Switching / Leakage / Total watts).
+ */
+export function parsePowerReport(stdout: string): PowerReport {
+  let totalW: number | undefined;
+  let internalW: number | undefined;
+  let switchingW: number | undefined;
+  let leakageW: number | undefined;
+  const breakdown: Record<string, number> = {};
+
+  for (const line of stdout.split('\n')) {
+    const total = line.match(/^Total\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/);
+    if (total) {
+      internalW = parseFloat(total[1]);
+      switchingW = parseFloat(total[2]);
+      leakageW = parseFloat(total[3]);
+      totalW = parseFloat(total[4]);
+      continue;
+    }
+    const group = line.match(/^(Sequential|Combinational|Clock|Macro|Pad)\s+\S+\s+\S+\s+\S+\s+(\S+)/);
+    if (group) {
+      const v = parseFloat(group[2]);
+      if (!Number.isNaN(v)) breakdown[group[1].toLowerCase()] = v;
+    }
+  }
+
+  const clean = (v: number | undefined) => (v !== undefined && !Number.isNaN(v) ? v : undefined);
+  const result: PowerReport = {
+    totalW: clean(totalW),
+    internalW: clean(internalW),
+    switchingW: clean(switchingW),
+    leakageW: clean(leakageW),
+  };
+  if (Object.keys(breakdown).length > 0) result.breakdown = breakdown;
+  return result;
+}

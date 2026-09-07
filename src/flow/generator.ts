@@ -217,3 +217,120 @@ report_tns
 report_worst_slack -max
 `;
 }
+
+export interface CtsScriptOptions {
+  placedDef: string;
+  topModule: string;
+  sdcFile?: string;
+  clockPeriodNs?: number;
+  outputDef?: string;
+  platform?: PlatformPaths;
+}
+
+export function generateCtsTcl(
+  options: CtsScriptOptions,
+  defaultPlatform: PlatformPaths
+): string {
+  const plat = options.platform || defaultPlatform;
+  const outputDef = options.outputDef || `${options.topModule}_cts.def`;
+
+  let sdcCommands = '';
+  if (options.sdcFile) {
+    sdcCommands = `read_sdc "${options.sdcFile}"`;
+  } else if (options.clockPeriodNs) {
+    sdcCommands = `
+current_design "${options.topModule}"
+if {[get_ports -quiet clk] != ""} {
+  create_clock -name core_clock -period ${options.clockPeriodNs} [get_ports clk]
+} elseif {[get_ports -quiet clock] != ""} {
+  create_clock -name core_clock -period ${options.clockPeriodNs} [get_ports clock]
+} else {
+  create_clock -name core_clock -period ${options.clockPeriodNs} [lindex [all_inputs] 0]
+}
+`;
+  }
+
+  return `
+read_lef "${plat.techLef}"
+read_lef "${plat.macroLef}"
+read_liberty "${plat.liberty}"
+
+read_def "${options.placedDef}"
+
+${sdcCommands}
+
+clock_tree_synthesis
+
+estimate_parasitics -placement
+report_wns
+report_tns
+
+write_def "${outputDef}"
+puts "CTS_COMPLETE: ${outputDef}"
+`;
+}
+
+export interface DetailRouteScriptOptions {
+  routedDef: string;
+  topModule: string;
+  outputDef?: string;
+  platform?: PlatformPaths;
+}
+
+export function generateDetailRouteTcl(
+  options: DetailRouteScriptOptions,
+  defaultPlatform: PlatformPaths
+): string {
+  const plat = options.platform || defaultPlatform;
+  const outputDef = options.outputDef || `${options.topModule}_droute.def`;
+
+  return `
+read_lef "${plat.techLef}"
+read_lef "${plat.macroLef}"
+read_liberty "${plat.liberty}"
+
+read_def "${options.routedDef}"
+
+detailed_route
+
+write_def "${outputDef}"
+puts "DETAIL_ROUTE_COMPLETE: ${outputDef}"
+`;
+}
+
+export interface PowerScriptOptions {
+  defFile: string;
+  topModule: string;
+  sdcFile?: string;
+  clockPeriodNs?: number;
+  platform?: PlatformPaths;
+}
+
+export function generatePowerTcl(
+  options: PowerScriptOptions,
+  defaultPlatform: PlatformPaths
+): string {
+  const plat = options.platform || defaultPlatform;
+
+  let sdcCommands = '';
+  if (options.sdcFile) {
+    sdcCommands = `read_sdc "${options.sdcFile}"`;
+  } else if (options.clockPeriodNs) {
+    sdcCommands = `
+create_clock [all_inputs] -name core_clock -period ${options.clockPeriodNs}
+`;
+  }
+
+  return `
+read_lef "${plat.techLef}"
+read_lef "${plat.macroLef}"
+read_liberty "${plat.liberty}"
+
+read_def "${options.defFile}"
+
+${sdcCommands}
+
+report_power
+puts "POWER_COMPLETE"
+`;
+}

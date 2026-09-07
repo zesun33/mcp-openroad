@@ -11,6 +11,11 @@ import { handleOpenroadPlace, openroadPlaceSchema } from './tools/place.js';
 import { handleOpenroadRoute, openroadRouteSchema } from './tools/route.js';
 import { handleOpenroadSta, openroadStaSchema } from './tools/sta.js';
 import { handleOpenroadToolchainInfo, openroadToolchainInfoSchema } from './tools/toolchain.js';
+import { handleOpenroadCts, openroadCtsSchema } from './tools/cts.js';
+import { handleOpenroadDetailRoute, openroadDetailRouteSchema } from './tools/detail_route.js';
+import { handleOpenroadStaCorners, openroadStaCornersSchema } from './tools/sta_corners.js';
+import { handleOpenroadPower, openroadPowerSchema } from './tools/power.js';
+import { handleOpenroadEval, openroadEvalSchema } from './tools/eval.js';
 
 export function createServer(): Server {
   const runner = new ToolRunner();
@@ -18,7 +23,7 @@ export function createServer(): Server {
   const server = new Server(
     {
       name: '@zesun33/mcp-openroad',
-      version: '0.1.0',
+      version: '0.2.0',
     },
     {
       capabilities: {
@@ -152,7 +157,7 @@ export function createServer(): Server {
     {
       name: 'openroad_route',
       description:
-        'Performs global routing (FastRoute) and detailed routing on a placed DEF file, reporting wirelength and DRC violation metrics.',
+        'Performs global routing (FastRoute) on a placed DEF file, reporting wirelength estimates. Use openroad_detail_route afterwards for detailed routing with DRC reporting.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -216,6 +221,90 @@ export function createServer(): Server {
       },
     },
     {
+      name: 'openroad_cts',
+      description:
+        'Runs clock tree synthesis (CTS) on a placed DEF file, reporting inserted clock buffers/nets and post-CTS timing slack.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          placed_def: { type: 'string', description: 'Placed DEF file path (output of openroad_place).' },
+          top_module: { type: 'string', description: 'Name of the top-level module.' },
+          sdc_file: { type: 'string', description: 'Optional SDC timing constraints file path.' },
+          clock_period_ns: { type: 'number', description: 'Target clock period in ns if no SDC provided (default: 1.0).' },
+          output_def: { type: 'string', description: 'Output CTS DEF file path.' },
+          cwd: { type: 'string', description: 'Optional working directory.' },
+          timeout_ms: { type: 'number', description: 'Timeout in milliseconds.' },
+        },
+        required: ['placed_def', 'top_module'],
+      },
+    },
+    {
+      name: 'openroad_detail_route',
+      description:
+        'Runs detailed routing on a globally-routed DEF file and reports DRC issue counts with samples. Completes even with findings; check drcIssues before signoff.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          routed_def: { type: 'string', description: 'Globally-routed DEF file path (output of openroad_route).' },
+          top_module: { type: 'string', description: 'Name of the top-level module.' },
+          output_def: { type: 'string', description: 'Output detail-routed DEF file path.' },
+          cwd: { type: 'string', description: 'Optional working directory.' },
+          timeout_ms: { type: 'number', description: 'Timeout in milliseconds.' },
+        },
+        required: ['routed_def', 'top_module'],
+      },
+    },
+    {
+      name: 'openroad_sta_corners',
+      description:
+        'Runs static timing analysis across multiple Liberty corners (one .lib per corner) on a DEF file, reporting per-corner WNS/TNS plus the worst corner.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          def_file: { type: 'string', description: 'DEF file path (placed or routed).' },
+          top_module: { type: 'string', description: 'Name of the top-level module.' },
+          liberty_files: { type: 'array', items: { type: 'string' }, description: 'Liberty (.lib) files, one per corner.' },
+          corner_names: { type: 'array', items: { type: 'string' }, description: 'Optional corner labels matching liberty_files order.' },
+          sdc_file: { type: 'string', description: 'Optional SDC timing constraints file path.' },
+          clock_period_ns: { type: 'number', description: 'Target clock period in ns (default: 1.0).' },
+          cwd: { type: 'string', description: 'Optional working directory.' },
+          timeout_ms: { type: 'number', description: 'Timeout per corner in milliseconds.' },
+        },
+        required: ['def_file', 'top_module', 'liberty_files'],
+      },
+    },
+    {
+      name: 'openroad_power',
+      description:
+        'Reports power (total/internal/switching/leakage watts plus per-group breakdown) for a placed or routed DEF via OpenSTA report_power. True IR-drop needs PSM, absent in OpenROAD 2.0.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          def_file: { type: 'string', description: 'DEF file path (placed or routed).' },
+          top_module: { type: 'string', description: 'Name of the top-level module.' },
+          sdc_file: { type: 'string', description: 'Optional SDC timing constraints file path.' },
+          clock_period_ns: { type: 'number', description: 'Target clock period in ns (default: 1.0).' },
+          cwd: { type: 'string', description: 'Optional working directory.' },
+          timeout_ms: { type: 'number', description: 'Timeout in milliseconds.' },
+        },
+        required: ['def_file', 'top_module'],
+      },
+    },
+    {
+      name: 'openroad_eval',
+      description:
+        'Evaluates a Tcl snippet in a fresh stateless OpenROAD session and returns capped stdout. Include any read_lef/read_liberty/read_def setup the query needs; no state persists between calls.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tcl: { type: 'string', description: 'Tcl snippet to evaluate (max 8000 chars).' },
+          cwd: { type: 'string', description: 'Optional working directory.' },
+          timeout_ms: { type: 'number', description: 'Timeout in milliseconds.' },
+        },
+        required: ['tcl'],
+      },
+    },
+    {
       name: 'openroad_toolchain_info',
       description:
         'Returns active container/host runtime and version information for OpenROAD, OpenSTA, and supported platform PDKs.',
@@ -262,6 +351,31 @@ export function createServer(): Server {
       if (name === 'openroad_sta') {
         const parsedArgs = openroadStaSchema.parse(args);
         return await handleOpenroadSta(runner, parsedArgs);
+      }
+
+      if (name === 'openroad_cts') {
+        const parsedArgs = openroadCtsSchema.parse(args);
+        return await handleOpenroadCts(runner, parsedArgs);
+      }
+
+      if (name === 'openroad_detail_route') {
+        const parsedArgs = openroadDetailRouteSchema.parse(args);
+        return await handleOpenroadDetailRoute(runner, parsedArgs);
+      }
+
+      if (name === 'openroad_sta_corners') {
+        const parsedArgs = openroadStaCornersSchema.parse(args);
+        return await handleOpenroadStaCorners(runner, parsedArgs);
+      }
+
+      if (name === 'openroad_power') {
+        const parsedArgs = openroadPowerSchema.parse(args);
+        return await handleOpenroadPower(runner, parsedArgs);
+      }
+
+      if (name === 'openroad_eval') {
+        const parsedArgs = openroadEvalSchema.parse(args);
+        return await handleOpenroadEval(runner, parsedArgs);
       }
 
       if (name === 'openroad_toolchain_info') {

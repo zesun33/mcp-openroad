@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
+import { assertDefWritten } from '../def_guard.js';
 import { getDefaultPlatformPaths, generateRouteTcl } from '../flow/generator.js';
 import { parseOpenRoadOutput } from '../parsers/metric_parser.js';
 import { RoutingResult } from '../parsers/types.js';
@@ -40,7 +41,9 @@ export async function handleOpenroadRoute(
   });
 
   const metrics = parseOpenRoadOutput(res.stdout, res.stderr);
-  const success = res.exitCode === 0 && res.stdout.includes('ROUTE_COMPLETE');
+  const markersOk = res.exitCode === 0 && res.stdout.includes('ROUTE_COMPLETE');
+  const missingDef = markersOk ? assertDefWritten(args.cwd, outDef) : null;
+  const success = markersOk && missingDef === null;
 
   // Count DRC violations if any
   const drcMatches = (res.stdout.match(/violation/gi) || []).length;
@@ -51,7 +54,7 @@ export async function handleOpenroadRoute(
     drcViolations: drcMatches,
     defFile: success ? outDef : undefined,
     warnings: metrics.warnings.slice(0, 10),
-    errors: res.exitCode !== 0 ? [res.stderr.trim() || 'Routing failed'] : [],
+    errors: missingDef ? [missingDef] : res.exitCode !== 0 ? [res.stderr.trim() || 'Routing failed'] : [],
   };
 
   return {

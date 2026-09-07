@@ -5,3 +5,10 @@ dist/
 *.sdc
 build_pnr/
 .DS_Store
+
+# Agent memory / local progress (never commit)
+MEMORY.md
+MEMORY.local.md
+.memory/
+*.memory.md
+*.local.md

@@ -53,6 +53,27 @@
 
 #### 3. End-to-End P&R and Static Timing Closure (400ms)
 
+#### 4. Clock Tree Synthesis on a Placed DEF
+```json
+// Tool Call: openroad_cts {"placed_def": "counter_placed.def", "top_module": "counter", "clock_period_ns": 1.0}
+{
+  "success": true,
+  "clockBuffers": 3,
+  "clockNets": 3,
+  "timing": { "timingMet": true, "wns": 0.0, "tns": 0.0 }
+}
+```
+
+#### 5. Power Breakdown Without Leaving the Agent Loop
+```json
+// Tool Call: openroad_power {"def_file": "counter_placed.def", "top_module": "counter"}
+{
+  "success": true,
+  "totalW": 5.23e-05,
+  "breakdown": { "sequential": 3.28e-05, "clock": 1.84e-05 }
+}
+```
+
 ```json
 // Tool Call: openroad_pnr {"netlist_file": "counter_netlist.v", "top_module": "counter", "clock_period_ns": 1.0}
 {
@@ -83,8 +104,13 @@
 | `openroad_pnr` | `netlist_file: string`<br>`top_module: string`<br>`sdc_file?: string`<br>`clock_period_ns?: number`<br>`core_utilization?: number`<br>`output_def?: string`<br>`cwd?: string` | OpenROAD Full Flow | Automated end-to-end physical design (floorplanning, placement, routing, and STA) returning area, utilization, wirelength, and timing slack metrics. |
 | `openroad_floorplan` | `netlist_file: string`<br>`top_module: string`<br>`die_width?: number`<br>`die_height?: number`<br>`core_margin?: number`<br>`output_def?: string`<br>`cwd?: string` | `initialize_floorplan`, `place_pins` | Initializes ASIC floorplan boundaries, core/die sizing, and I/O pin placement, generating a floorplan DEF file. |
 | `openroad_place` | `floorplan_def: string`<br>`top_module: string`<br>`density?: number`<br>`output_def?: string`<br>`cwd?: string` | `global_placement`, `detailed_placement` | Performs standard cell global analytical placement (RePLace) and legalized detailed placement (DPL). |
-| `openroad_route` | `placed_def: string`<br>`top_module: string`<br>`output_def?: string`<br>`cwd?: string` | `global_route` | Performs global routing (FastRoute) and detailed routing, reporting wirelength and DRC violation metrics. |
+| `openroad_route` | `placed_def: string`<br>`top_module: string`<br>`output_def?: string`<br>`cwd?: string` | `global_route` | Performs global routing (FastRoute) on a placed DEF, reporting wirelength estimates. Follow with `openroad_detail_route` for DRC reporting. |
 | `openroad_sta` | `def_file: string`<br>`top_module: string`<br>`sdc_file?: string`<br>`clock_period_ns?: number`<br>`cwd?: string` | OpenSTA | Performs static timing analysis on placed or routed DEF files, reporting Worst Negative Slack (WNS), Total Negative Slack (TNS), and critical paths. |
+| `openroad_cts` | `placed_def: string`<br>`top_module: string`<br>`sdc_file?: string`<br>`clock_period_ns?: number`<br>`output_def?: string`<br>`cwd?: string` | `clock_tree_synthesis` | Runs CTS on a placed DEF, reporting inserted clock buffers/nets and post-CTS timing. |
+| `openroad_detail_route` | `routed_def: string`<br>`top_module: string`<br>`output_def?: string`<br>`cwd?: string` | `detailed_route` | Runs detailed routing with honest DRC issue counts and samples (completes with findings; check `drcIssues`). |
+| `openroad_sta_corners` | `def_file: string`<br>`top_module: string`<br>`liberty_files: string[]`<br>`corner_names?: string[]`<br>`sdc_file?: string`<br>`clock_period_ns?: number`<br>`cwd?: string` | OpenSTA | STA across Liberty corners with per-corner WNS/TNS plus the worst corner. |
+| `openroad_power` | `def_file: string`<br>`top_module: string`<br>`sdc_file?: string`<br>`clock_period_ns?: number`<br>`cwd?: string` | `report_power` | Power totals plus per-group breakdown. True IR-drop needs PSM (absent in OpenROAD 2.0). |
+| `openroad_eval` | `tcl: string`<br>`cwd?: string` | `openroad -exit` | Stateless single-shot Tcl eval with capped stdout; include setup in the snippet. |
 | `openroad_toolchain_info` | `cwd?: string` | Probe | Returns container/host runtime and version information for OpenROAD, OpenSTA, and supported platform PDKs. |
 
 ---

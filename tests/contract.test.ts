@@ -19,6 +19,11 @@ test('MCP server registers required OpenROAD physical design tools', async () =>
   assert.ok(toolNames.includes('openroad_place'), 'Should expose openroad_place');
   assert.ok(toolNames.includes('openroad_route'), 'Should expose openroad_route');
   assert.ok(toolNames.includes('openroad_sta'), 'Should expose openroad_sta');
+  assert.ok(toolNames.includes('openroad_cts'), 'Should expose openroad_cts');
+  assert.ok(toolNames.includes('openroad_detail_route'), 'Should expose openroad_detail_route');
+  assert.ok(toolNames.includes('openroad_sta_corners'), 'Should expose openroad_sta_corners');
+  assert.ok(toolNames.includes('openroad_power'), 'Should expose openroad_power');
+  assert.ok(toolNames.includes('openroad_eval'), 'Should expose openroad_eval');
   assert.ok(toolNames.includes('openroad_toolchain_info'), 'Should expose openroad_toolchain_info');
 
   for (const tool of response.tools) {
