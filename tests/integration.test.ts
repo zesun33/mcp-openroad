@@ -259,6 +259,8 @@ test('Integration (PDK): openroad_pnr detail_route writes real wires on sky130',
     platform: 'sky130',
     core_utilization: 0.5,
     detail_route: true,
+    tapcells: true,
+    fillers: true,
     output_def: 'counter_sky130_dr_tmp.def',
     cwd: projectRoot,
     timeout_ms: 300000,
@@ -269,4 +271,25 @@ test('Integration (PDK): openroad_pnr detail_route writes real wires on sky130',
   // Real wires (not guides) are what extraction/LVS need.
   const def = await fs.readFile(path.join(projectRoot, 'counter_sky130_dr_tmp.def'), 'utf-8');
   assert.ok(/\+ ROUTED \S/.test(def), 'expected ROUTED wire geometry in DEF');
+  // 11 logic cells plus inserted taps and fillers (instance lines carry
+  // placement suffixes, so anchor on the cell name, not end-of-line).
+  const comps = def.match(/^\s*-\s+\S+\s+sky130_fd_sc_hd__\S+/gm) || [];
+  assert.ok(comps.length > 11, `expected tap/fill insertion beyond 11 cells, got ${comps.length}`);
+  assert.ok(def.includes('sky130_fd_sc_hd__tap_1'), 'expected tap cells in DEF');
+});
+
+test('Integration: openroad_pnr tapcells on nangate45 fails honestly', async () => {
+  // Tool throws honestly (no tapcell masters on nangate45); the server
+  // layer converts this to isError. Handler rejects without spawning OR.
+  await assert.rejects(
+    handleOpenroadPnr(new ToolRunner(), {
+      netlist_file: 'fixtures/counter_netlist.v',
+      top_module: 'counter',
+      tapcells: true,
+      output_def: 'counter_tap_tmp.def',
+      cwd: projectRoot,
+      timeout_ms: 60000,
+    }),
+    /no tapcell masters/
+  );
 });

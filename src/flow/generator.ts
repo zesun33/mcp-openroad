@@ -9,6 +9,12 @@ export interface PlatformPaths {
   // density. Sky130 needs ~0.15 on small designs (GPL-0302 otherwise);
   // nangate45 keeps proven exact-tie behavior when unset.
   densityMargin?: number;
+  // Well-tap / endcap insertion (sky130 needs these; no PDN required).
+  tapcellMaster?: string;
+  endcapMaster?: string;
+  tapDistance?: number;
+  // Gap fillers + decaps placed after routing (TCL list form).
+  fillerMasters?: string[];
 }
 
 export function getDefaultPlatformPaths(): PlatformPaths {
@@ -34,6 +40,17 @@ export function getSky130PlatformPaths(pdkRoot: string): PlatformPaths {
     pinHorLayer: 'met3',
     pinVerLayer: 'met2',
     densityMargin: 0.15,
+    tapcellMaster: 'sky130_fd_sc_hd__tap_1',
+    endcapMaster: 'sky130_fd_sc_hd__decap_4',
+    tapDistance: 14,
+    fillerMasters: [
+      'sky130_fd_sc_hd__fill_1',
+      'sky130_fd_sc_hd__fill_2',
+      'sky130_fd_sc_hd__fill_4',
+      'sky130_fd_sc_hd__fill_8',
+      'sky130_fd_sc_hd__decap_4',
+      'sky130_fd_sc_hd__decap_8',
+    ],
   };
 }
 
@@ -66,6 +83,11 @@ export interface PnrScriptOptions {
   // Run detailed_route after global routing (real wires in the DEF).
   // Default false: global-route-only DEFs stream/extract as expected.
   detailRoute?: boolean;
+  // Insert well-tap/endcap cells after placement (needs platform tapcell
+  // config; honest error otherwise). No PDN required.
+  tapcells?: boolean;
+  // Fill placement gaps with filler/decap cells after routing.
+  fillers?: boolean;
 }
 
 export function generatePnrTcl(options: PnrScriptOptions, defaultPlatform: PlatformPaths): string {
@@ -111,9 +133,11 @@ place_pins -hor_layer ${plat.pinHorLayer} -ver_layer ${plat.pinVerLayer}
 
 global_placement -density ${placeDensity}
 detailed_placement
+${options.tapcells && plat.tapcellMaster ? `tapcell -tapcell_master ${plat.tapcellMaster} -endcap_master ${plat.endcapMaster} -distance ${plat.tapDistance}` : ""}
 
 global_route
 ${options.detailRoute ? "detailed_route" : ""}
+${options.fillers && plat.fillerMasters ? `filler_placement {${plat.fillerMasters.join(" ")}}` : ""}
 
 estimate_parasitics -placement
 report_checks -path_delay max

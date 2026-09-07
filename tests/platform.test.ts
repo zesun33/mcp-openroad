@@ -57,3 +57,17 @@ test('pnr script includes detailed_route only when requested', () => {
   const detailed = generatePnrTcl({ ...base, detailRoute: true }, plat);
   assert.ok(detailed.includes('\ndetailed_route\n'), 'detail flag must emit detailed_route');
 });
+
+test('pnr script emits tapcell and filler blocks only when requested with config', () => {
+  const sky = getSky130PlatformPaths('/pdk');
+  const base = { netlistFile: 'c.v', topModule: 'c', outputDef: 'c.def' };
+  const plain = generatePnrTcl(base, sky);
+  assert.ok(!plain.includes('tapcell '), 'taps off by default');
+  assert.ok(!plain.includes('filler_placement'), 'fillers off by default');
+  const full = generatePnrTcl({ ...base, tapcells: true, fillers: true }, sky);
+  assert.ok(full.includes('tapcell -tapcell_master sky130_fd_sc_hd__tap_1 -endcap_master sky130_fd_sc_hd__decap_4 -distance 14'));
+  assert.ok(full.includes('filler_placement {sky130_fd_sc_hd__fill_1 sky130_fd_sc_hd__fill_2 sky130_fd_sc_hd__fill_4 sky130_fd_sc_hd__fill_8 sky130_fd_sc_hd__decap_4 sky130_fd_sc_hd__decap_8}'));
+  // Tap/fill ordering: taps after placement, fillers after routing.
+  assert.ok(full.indexOf('tapcell ') < full.indexOf('global_route'));
+  assert.ok(full.indexOf('filler_placement') > full.indexOf('global_route'));
+});

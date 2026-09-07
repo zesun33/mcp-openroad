@@ -15,6 +15,8 @@ export const openroadPnrSchema = z.object({
   output_def: z.string().optional().describe('Optional output routed DEF file path'),
   platform: z.enum(['nangate45', 'sky130']).optional().default('nangate45').describe("Process platform (default: 'nangate45'). 'sky130' needs MCP_OPENROAD_PDK_ROOT."),
   detail_route: z.boolean().optional().default(false).describe('Run detailed_route after global routing so the DEF contains real wires (needed for extraction/LVS; default: false)'),
+  tapcells: z.boolean().optional().default(false).describe('Insert well-tap/endcap cells after placement (needs a platform with tapcell config, e.g. sky130; default: false)'),
+  fillers: z.boolean().optional().default(false).describe('Fill placement gaps with filler/decap cells after routing (needs a platform with filler config; default: false)'),
   cwd: z.string().optional().describe('Optional working directory'),
   timeout_ms: z.number().optional().default(60000).describe('Timeout in milliseconds'),
 });
@@ -24,6 +26,12 @@ export async function handleOpenroadPnr(
   args: z.infer<typeof openroadPnrSchema>
 ) {
   const defaultPlatform = resolvePlatformPaths(runner, args.platform);
+  if (args.tapcells && !defaultPlatform.tapcellMaster) {
+    throw new Error(`tapcells requested but platform '${args.platform || 'nangate45'}' defines no tapcell masters.`);
+  }
+  if (args.fillers && !defaultPlatform.fillerMasters) {
+    throw new Error(`fillers requested but platform '${args.platform || 'nangate45'}' defines no filler masters.`);
+  }
   const outDef = args.output_def || `${args.top_module}_routed.def`;
 
   const tcl = generatePnrTcl(
@@ -35,6 +43,8 @@ export async function handleOpenroadPnr(
       coreUtilization: args.core_utilization,
       outputDef: outDef,
       detailRoute: args.detail_route,
+      tapcells: args.tapcells,
+      fillers: args.fillers,
     },
     defaultPlatform
   );
