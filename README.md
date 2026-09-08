@@ -139,7 +139,7 @@ podman pull ghcr.io/zesun33/asic:latest
 export MCP_OPENROAD_IMAGE=ghcr.io/zesun33/asic
 ```
 
-Local builds from `eda-docker-images` still work as `localhost/zesun33/asic` (the historical default). Override anytime with `MCP_OPENROAD_IMAGE`.
+`ghcr.io/zesun33/asic` is the default (anyone can pull). Local builds still work as `localhost/zesun33/asic` via `MCP_OPENROAD_IMAGE`.
 
 - Container mount: `-v <workspace>:/workspace:Z -w /workspace`
 - Podman storage option: `--storage-opt overlay.ignore_chown_errors=true`

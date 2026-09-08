@@ -1,6 +1,6 @@
 {
   "name": "@zesun33/mcp-openroad",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Model Context Protocol (MCP) server for OpenROAD digital ASIC physical design and static timing analysis",
   "type": "module",
   "bin": {
@@ -26,7 +26,8 @@
   },
   "license": "Apache-2.0",
   "files": [
-    "dist"
+    "dist",
+    "platforms"
   ],
   "publishConfig": {
     "access": "public"
