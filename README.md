@@ -6,9 +6,19 @@
 [![CI](https://github.com/zesun33/mcp-openroad/actions/workflows/ci.yml/badge.svg)](https://github.com/zesun33/mcp-openroad/actions/workflows/ci.yml)
 [![Protocol: MCP](https://img.shields.io/badge/protocol-MCP_stdio-blueviolet)](https://modelcontextprotocol.io)
 [![Runtime: Rootless Podman](https://img.shields.io/badge/runtime-rootless_podman-brightgreen)](#execution-runtime)
-[![Version](https://img.shields.io/badge/version-0.2.3-informational)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.2.4-informational)](./package.json)
 
 `mcp-openroad` equips AI coding agents and IDEs (**Cursor**, **Windsurf**, **GitHub Copilot / OpenAI Codex**, **Claude Code**, **Google Antigravity**, **OpenCode**, **Cline**) with structured tools to execute physical design (P&R) flows over standard cell netlists. It automates floorplanning, analytical cell placement, clock tree synthesis (CTS), global/detailed routing, and static timing analysis (STA), transforming verbose multi-thousand-line terminal logs into clean, low-token JSON metrics (`< 150 tokens`).
+
+## Install and run
+
+Run this MCP server directly from npm:
+
+```bash
+npx -y @zesun33/mcp-openroad
+```
+
+For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-asic`.
 
 ---
 
