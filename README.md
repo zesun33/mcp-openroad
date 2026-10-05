@@ -219,3 +219,7 @@ Strict 6-gate verification suite matching the portfolio engineering standard:
 ## License
 
 Apache-2.0 © 2026 Md Zesun Ahmed Mia
+
+## npm releases
+
+See [RELEASING.md](https://github.com/zesun33/mcp-openroad/blob/main/RELEASING.md) for GitHub Actions dry runs and trusted publishing.
