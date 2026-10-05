@@ -1,5 +1,26 @@
 # @zesun33/mcp-openroad
 
+<!-- BEGIN GENERATED PROJECT GUIDE -->
+
+## Purpose and first steps
+
+Run physical-design stages and inspect timing for a netlist through an MCP server.
+
+**Who it is for:** Hardware engineers using an MCP-capable client or coding agent.
+
+**First task:** Configure the server in your MCP client, then call `openroad_toolchain_info` before running a design.
+
+**What to expect:** Tool availability, then placement/routing artifacts and stage-specific timing metrics.
+
+**Current scope:** Published MCP server. The npx command starts a stdio server that waits for a client; EDA execution also needs its documented host/container tools.
+
+**Start here:** [Runtime requirements and configuration](README.md#execution-runtime).
+
+**Related projects:** [mcp-yosys](https://github.com/zesun33/mcp-yosys), [mcp-gds](https://github.com/zesun33/mcp-gds), [agentic-asic](https://github.com/zesun33/agentic-asic).
+
+[Choose another project](https://github.com/zesun33/personal-projects/blob/main/GETTING_STARTED.md).
+<!-- END GENERATED PROJECT GUIDE -->
+
 > Model Context Protocol (MCP) server for open-source digital ASIC physical design (place-and-route) and static timing analysis via [OpenROAD](https://theopenroadproject.org/).
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -24,6 +45,8 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 
 ## ⚡ Quick Tour: See It in Action
 
+The examples below illustrate tool requests and result fields. Timings, counts, and scores depend on the input and runtime; they are not guaranteed outcomes or fresh verification results.
+
 ### Why AI Agents Need `mcp-openroad`
 
 | Without `mcp-openroad` (Raw OpenROAD CLI) | With `mcp-openroad` (Structured MCP) |
@@ -34,7 +57,7 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 | Host installation requires complex C++ dependencies and conda | **Isolated rootless Podman** (`ghcr.io/zesun33/asic`) |
 | Unplaced cells and DRC shorts require visual inspection | Pinpointed **DRC counts**, **HPWL**, and **displacement** metrics |
 
-### Real Agent Scenarios in 60 Seconds
+### Example tool requests and results
 
 #### 1. Probing the Environment (Zero-Config Verification)
 
